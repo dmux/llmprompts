@@ -1,0 +1,699 @@
+Para implementar um conector AWS Glue personalizado com capacidade de leitura e gravação via JDBC em uma conexão SQL Server, utilizando classes org.apache.spark.sql, precisamos seguir alguns passos importantes. Abaixo está um exemplo básico de como implementar isso em Java:
+
+Configuração do Ambiente:
+
+Certifique-se de ter o AWS SDK para Java, Apache Spark e JDBC driver para SQL Server em seu classpath.
+Crie um projeto Maven para gerenciar as dependências facilmente.
+Dependências Maven:
+
+xml
+Copiar código
+<dependencies>
+    <dependency>
+        <groupId>software.amazon.awssdk</groupId>
+        <artifactId>aws-java-sdk-glue</artifactId>
+        <version>2.15.40</version>
+    </dependency>
+    <dependency>
+        <groupId>org.apache.spark</groupId>
+        <artifactId>spark-core_2.12</artifactId>
+        <version>3.1.1</version>
+    </dependency>
+    <dependency>
+        <groupId>org.apache.spark</groupId>
+        <artifactId>spark-sql_2.12</artifactId>
+        <version>3.1.1</version>
+    </dependency>
+    <dependency>
+        <groupId>com.microsoft.sqlserver</groupId>
+        <artifactId>mssql-jdbc</artifactId>
+        <version>8.4.1.jre8</version>
+    </dependency>
+</dependencies>
+Implementação do Conector:
+
+java
+Copiar código
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
+import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.SaveMode;
+import java.util.Properties;
+
+public class GlueCustomConnector {
+    
+    private static final String JDBC_DRIVER = "com.microsoft.sqlserver.jdbc.SQLServerDriver";
+    private static final String JDBC_URL = "jdbc:sqlserver://<SQL_SERVER_URL>;databaseName=<DATABASE_NAME>";
+    private static final String JDBC_USER = "<USER>";
+    private static final String JDBC_PASSWORD = "<PASSWORD>";
+    
+    public static void main(String[] args) {
+        SparkSession spark = SparkSession.builder()
+            .appName("AWS Glue Custom Connector")
+            .config("spark.master", "local")
+            .getOrCreate();
+        
+        // Configuração JDBC
+        Properties connectionProperties = new Properties();
+        connectionProperties.put("user", JDBC_USER);
+        connectionProperties.put("password", JDBC_PASSWORD);
+        connectionProperties.put("driver", JDBC_DRIVER);
+        
+        // Leitura de dados do SQL Server
+        Dataset<Row> jdbcDF = spark.read()
+            .jdbc(JDBC_URL, "tabela_de_entrada", connectionProperties);
+        
+        jdbcDF.show();  // Mostrar os dados lidos
+        
+        // Processamento de dados (opcional)
+        Dataset<Row> processedDF = jdbcDF.filter("coluna > 100");  // Exemplo de filtro
+        
+        // Escrita de dados de volta ao SQL Server
+        processedDF.write()
+            .mode(SaveMode.Overwrite)
+            .jdbc(JDBC_URL, "tabela_de_saida", connectionProperties);
+        
+        spark.stop();
+    }
+}
+Explicação do Código:
+
+Configuração da Conexão JDBC:
+
+Definimos a URL do JDBC, usuário e senha.
+Usamos Properties para armazenar as configurações da conexão.
+Leitura de Dados:
+
+Usamos o método jdbc de SparkSession.read para ler dados de uma tabela do SQL Server.
+Processamento de Dados:
+
+Um exemplo simples de filtragem dos dados lidos.
+Escrita de Dados:
+
+Usamos o método jdbc de DataFrameWriter para escrever dados processados de volta ao SQL Server.
+Notas Finais:
+
+Substitua os placeholders (<SQL_SERVER_URL>, <DATABASE_NAME>, <USER>, <PASSWORD>, tabela_de_entrada, tabela_de_saida) com valores reais.
+O conector deve ser executado em um ambiente que tenha acesso à rede onde o SQL Server está hospedado.
+Certifique-se de que as permissões adequadas estão configuradas no SQL Server para as operações de leitura e escrita.
+
+mais como seria no caso de um visual custom connector?
+ChatGPT
+Para criar um conector personalizado visual no AWS Glue que possa ler e gravar dados em um SQL Server via JDBC, você precisará de um pouco mais de infraestrutura em torno da configuração e do código. O AWS Glue fornece uma maneira de criar conectores personalizados que podem ser integrados à interface de ETL visual.
+
+Aqui estão os passos detalhados para criar um conector personalizado visual para o AWS Glue:
+
+Passos para Criar um Conector Personalizado Visual:
+Preparar o Ambiente de Desenvolvimento:
+
+Instale o AWS CLI e configure com suas credenciais.
+Configure um bucket S3 para armazenar o conector personalizado.
+Tenha o driver JDBC do SQL Server disponível.
+Criar um Projeto Maven:
+
+Crie um diretório para o projeto e adicione um arquivo pom.xml para gerenciar as dependências.
+Configurar Dependências no pom.xml:
+
+xml
+Copiar código
+<dependencies>
+    <dependency>
+        <groupId>software.amazon.awssdk</groupId>
+        <artifactId>aws-java-sdk-glue</artifactId>
+        <version>2.15.40</version>
+    </dependency>
+    <dependency>
+        <groupId>org.apache.spark</groupId>
+        <artifactId>spark-core_2.12</artifactId>
+        <version>3.1.1</version>
+    </dependency>
+    <dependency>
+        <groupId>org.apache.spark</groupId>
+        <artifactId>spark-sql_2.12</artifactId>
+        <version>3.1.1</version>
+    </dependency>
+    <dependency>
+        <groupId>com.microsoft.sqlserver</groupId>
+        <artifactId>mssql-jdbc</artifactId>
+        <version>8.4.1.jre8</version>
+    </dependency>
+</dependencies>
+Implementar o Conector:
+
+Crie a classe principal do conector que implementará a lógica de leitura e gravação.
+java
+Copiar código
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
+import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.SaveMode;
+
+import java.util.Properties;
+
+public class GlueCustomConnector {
+    
+    private static final String JDBC_DRIVER = "com.microsoft.sqlserver.jdbc.SQLServerDriver";
+    private static final String JDBC_URL = "jdbc:sqlserver://<SQL_SERVER_URL>;databaseName=<DATABASE_NAME>";
+    private static final String JDBC_USER = "<USER>";
+    private static final String JDBC_PASSWORD = "<PASSWORD>";
+    
+    public static void main(String[] args) {
+        SparkSession spark = SparkSession.builder()
+            .appName("AWS Glue Custom Connector")
+            .config("spark.master", "local")
+            .getOrCreate();
+        
+        // Configuração JDBC
+        Properties connectionProperties = new Properties();
+        connectionProperties.put("user", JDBC_USER);
+        connectionProperties.put("password", JDBC_PASSWORD);
+        connectionProperties.put("driver", JDBC_DRIVER);
+        
+        // Leitura de dados do SQL Server
+        Dataset<Row> jdbcDF = spark.read()
+            .jdbc(JDBC_URL, "tabela_de_entrada", connectionProperties);
+        
+        jdbcDF.show();  // Mostrar os dados lidos
+        
+        // Processamento de dados (opcional)
+        Dataset<Row> processedDF = jdbcDF.filter("coluna > 100");  // Exemplo de filtro
+        
+        // Escrita de dados de volta ao SQL Server
+        processedDF.write()
+            .mode(SaveMode.Overwrite)
+            .jdbc(JDBC_URL, "tabela_de_saida", connectionProperties);
+        
+        spark.stop();
+    }
+}
+Empacotar o Conector:
+
+Empacote o projeto em um JAR usando Maven:
+sh
+Copiar código
+mvn clean package
+Fazer Upload do JAR para o S3:
+
+Faça o upload do JAR gerado para o bucket S3 configurado:
+sh
+Copiar código
+aws s3 cp target/seu-conector.jar s3://seu-bucket/
+Criar o Manifesto do Conector:
+
+Crie um arquivo manifest.json que define o conector para o AWS Glue:
+json
+Copiar código
+{
+    "description": "Custom Connector for SQL Server via JDBC",
+    "author": "Seu Nome",
+    "connectionType": "custom.jdbc.sqlserver",
+    "properties": {
+        "glueVersion": "2.0",
+        "connectorVersion": "1.0",
+        "supportsS3": true,
+        "supportsRedshift": false
+    },
+    "className": "GlueCustomConnector",
+    "jarFile": "s3://seu-bucket/seu-conector.jar"
+}
+Registrar o Conector no AWS Glue:
+
+Use o AWS CLI para registrar o conector:
+sh
+Copiar código
+aws glue create-connection --name custom-sqlserver-connector --connection-input '{
+    "Name": "custom-sqlserver-connector",
+    "ConnectionType": "CUSTOM",
+    "PhysicalConnectionRequirements": {
+        "AvailabilityZone": "us-east-1a",
+        "SecurityGroupIdList": ["sg-xxxxxxxx"],
+        "SubnetId": "subnet-xxxxxxxx"
+    },
+    "ConnectionProperties": {
+        "CONNECTION_URL": "jdbc:sqlserver://<SQL_SERVER_URL>;databaseName=<DATABASE_NAME>",
+        "USERNAME": "<USER>",
+        "PASSWORD": "<PASSWORD>",
+        "CUSTOM_JDBC_DRIVER_JAR_URL": "s3://seu-bucket/seu-conector.jar",
+        "CUSTOM_JDBC_DRIVER_CLASS_NAME": "com.microsoft.sqlserver.jdbc.SQLServerDriver"
+    }
+}'
+Usar o Conector no AWS Glue Studio:
+
+Agora, no AWS Glue Studio, você deve ser capaz de ver o conector personalizado na lista de conectores.
+Crie um job ETL usando a interface visual do Glue Studio, selecione o conector personalizado, configure as fontes e os destinos, e execute o job.
+Conclusão
+Este é um guia passo a passo para criar um conector personalizado visual no AWS Glue para leitura e gravação de dados em um SQL Server via JDBC. Certifique-se de ajustar os parâmetros e propriedades conforme necessário para sua configuração específica.
+
+como seria o connector com leitura e gravação via jdbc?
+ChatGPT
+Para criar um conector personalizado no AWS Glue que pode ler e gravar dados via JDBC em um SQL Server, é necessário seguir os passos detalhados para desenvolver o conector, empacotá-lo e registrá-lo no AWS Glue. Abaixo está um guia completo, incluindo a implementação do conector para leitura e gravação via JDBC.
+
+Passos para Criar um Conector Personalizado
+Preparar o Ambiente de Desenvolvimento
+
+Instale o AWS CLI e configure suas credenciais.
+Configure um bucket S3 para armazenar o conector personalizado.
+Tenha o driver JDBC do SQL Server disponível.
+Criar um Projeto Maven
+
+Crie um diretório para o projeto e adicione um arquivo pom.xml para gerenciar as dependências.
+Configurar Dependências no pom.xml
+
+xml
+Copiar código
+<dependencies>
+    <dependency>
+        <groupId>software.amazon.awssdk</groupId>
+        <artifactId>aws-java-sdk-glue</artifactId>
+        <version>2.15.40</version>
+    </dependency>
+    <dependency>
+        <groupId>org.apache.spark</groupId>
+        <artifactId>spark-core_2.12</artifactId>
+        <version>3.1.1</version>
+    </dependency>
+    <dependency>
+        <groupId>org.apache.spark</groupId>
+        <artifactId>spark-sql_2.12</artifactId>
+        <version>3.1.1</version>
+    </dependency>
+    <dependency>
+        <groupId>com.microsoft.sqlserver</groupId>
+        <artifactId>mssql-jdbc</artifactId>
+        <version>8.4.1.jre8</version>
+    </dependency>
+</dependencies>
+Implementar o Conector
+
+Crie a classe principal do conector que implementará a lógica de leitura e gravação.
+java
+Copiar código
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
+import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.SaveMode;
+
+import java.util.Properties;
+
+public class GlueCustomConnector {
+    
+    private static final String JDBC_DRIVER = "com.microsoft.sqlserver.jdbc.SQLServerDriver";
+    private static final String JDBC_URL = "jdbc:sqlserver://<SQL_SERVER_URL>;databaseName=<DATABASE_NAME>";
+    private static final String JDBC_USER = "<USER>";
+    private static final String JDBC_PASSWORD = "<PASSWORD>";
+    
+    public static void main(String[] args) {
+        SparkSession spark = SparkSession.builder()
+            .appName("AWS Glue Custom Connector")
+            .config("spark.master", "local")
+            .getOrCreate();
+        
+        // Configuração JDBC
+        Properties connectionProperties = new Properties();
+        connectionProperties.put("user", JDBC_USER);
+        connectionProperties.put("password", JDBC_PASSWORD);
+        connectionProperties.put("driver", JDBC_DRIVER);
+        
+        // Leitura de dados do SQL Server
+        Dataset<Row> jdbcDF = spark.read()
+            .jdbc(JDBC_URL, "tabela_de_entrada", connectionProperties);
+        
+        jdbcDF.show();  // Mostrar os dados lidos
+        
+        // Processamento de dados (opcional)
+        Dataset<Row> processedDF = jdbcDF.filter("coluna > 100");  // Exemplo de filtro
+        
+        // Escrita de dados de volta ao SQL Server
+        processedDF.write()
+            .mode(SaveMode.Overwrite)
+            .jdbc(JDBC_URL, "tabela_de_saida", connectionProperties);
+        
+        spark.stop();
+    }
+}
+Empacotar o Conector
+
+Empacote o projeto em um JAR usando Maven:
+sh
+Copiar código
+mvn clean package
+Fazer Upload do JAR para o S3
+
+Faça o upload do JAR gerado para o bucket S3 configurado:
+sh
+Copiar código
+aws s3 cp target/seu-conector.jar s3://seu-bucket/
+Criar o Manifesto do Conector
+
+Crie um arquivo manifest.json que define o conector para o AWS Glue:
+json
+Copiar código
+{
+    "description": "Custom Connector for SQL Server via JDBC",
+    "author": "Seu Nome",
+    "connectionType": "custom.jdbc.sqlserver",
+    "properties": {
+        "glueVersion": "2.0",
+        "connectorVersion": "1.0",
+        "supportsS3": true,
+        "supportsRedshift": false
+    },
+    "className": "GlueCustomConnector",
+    "jarFile": "s3://seu-bucket/seu-conector.jar"
+}
+Registrar o Conector no AWS Glue
+
+Use o AWS CLI para registrar o conector:
+sh
+Copiar código
+aws glue create-connection --name custom-sqlserver-connector --connection-input '{
+    "Name": "custom-sqlserver-connector",
+    "ConnectionType": "CUSTOM",
+    "PhysicalConnectionRequirements": {
+        "AvailabilityZone": "us-east-1a",
+        "SecurityGroupIdList": ["sg-xxxxxxxx"],
+        "SubnetId": "subnet-xxxxxxxx"
+    },
+    "ConnectionProperties": {
+        "CONNECTION_URL": "jdbc:sqlserver://<SQL_SERVER_URL>;databaseName=<DATABASE_NAME>",
+        "USERNAME": "<USER>",
+        "PASSWORD": "<PASSWORD>",
+        "CUSTOM_JDBC_DRIVER_JAR_URL": "s3://seu-bucket/seu-conector.jar",
+        "CUSTOM_JDBC_DRIVER_CLASS_NAME": "com.microsoft.sqlserver.jdbc.SQLServerDriver"
+    }
+}'
+Usar o Conector no AWS Glue Studio
+
+Agora, no AWS Glue Studio, você deve ser capaz de ver o conector personalizado na lista de conectores.
+Crie um job ETL usando a interface visual do Glue Studio, selecione o conector personalizado, configure as fontes e os destinos, e execute o job.
+Conclusão
+Este guia fornece um exemplo detalhado de como criar, empacotar e registrar um conector personalizado no AWS Glue para leitura e gravação de dados em um SQL Server via JDBC. Ajuste os parâmetros e propriedades conforme necessário para sua configuração específica e siga as melhores práticas de segurança ao gerenciar suas credenciais e permissões de acesso.
+
+esse custom conector precisa ser do tipo source e target e precisa aparecer no aws glue visual etl
+ChatGPT
+Para criar um conector personalizado no AWS Glue que funcione como uma fonte e um destino, e que possa ser usado no AWS Glue Visual ETL, você precisa seguir algumas etapas adicionais além da criação do conector básico. Aqui está um guia detalhado:
+
+Passos para Criar um Conector Personalizado Visual que Atue como Fonte e Destino
+Preparar o Ambiente de Desenvolvimento
+
+Instale o AWS CLI e configure suas credenciais.
+Configure um bucket S3 para armazenar o conector personalizado.
+Tenha o driver JDBC do SQL Server disponível.
+Criar um Projeto Maven
+
+Crie um diretório para o projeto e adicione um arquivo pom.xml para gerenciar as dependências.
+Configurar Dependências no pom.xml
+
+xml
+Copiar código
+<dependencies>
+    <dependency>
+        <groupId>software.amazon.awssdk</groupId>
+        <artifactId>aws-java-sdk-glue</artifactId>
+        <version>2.15.40</version>
+    </dependency>
+    <dependency>
+        <groupId>org.apache.spark</groupId>
+        <artifactId>spark-core_2.12</artifactId>
+        <version>3.1.1</version>
+    </dependency>
+    <dependency>
+        <groupId>org.apache.spark</groupId>
+        <artifactId>spark-sql_2.12</artifactId>
+        <version>3.1.1</version>
+    </dependency>
+    <dependency>
+        <groupId>com.microsoft.sqlserver</groupId>
+        <artifactId>mssql-jdbc</artifactId>
+        <version>8.4.1.jre8</version>
+    </dependency>
+</dependencies>
+Implementar o Conector
+
+Crie a classe principal do conector que implementará a lógica de leitura e gravação.
+java
+Copiar código
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
+import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.SaveMode;
+
+import java.util.Properties;
+
+public class GlueCustomConnector {
+    
+    private static final String JDBC_DRIVER = "com.microsoft.sqlserver.jdbc.SQLServerDriver";
+    private static final String JDBC_URL = "jdbc:sqlserver://<SQL_SERVER_URL>;databaseName=<DATABASE_NAME>";
+    private static final String JDBC_USER = "<USER>";
+    private static final String JDBC_PASSWORD = "<PASSWORD>";
+    
+    public static void main(String[] args) {
+        SparkSession spark = SparkSession.builder()
+            .appName("AWS Glue Custom Connector")
+            .config("spark.master", "local")
+            .getOrCreate();
+        
+        // Configuração JDBC
+        Properties connectionProperties = new Properties();
+        connectionProperties.put("user", JDBC_USER);
+        connectionProperties.put("password", JDBC_PASSWORD);
+        connectionProperties.put("driver", JDBC_DRIVER);
+        
+        // Leitura de dados do SQL Server
+        Dataset<Row> jdbcDF = spark.read()
+            .jdbc(JDBC_URL, "tabela_de_entrada", connectionProperties);
+        
+        jdbcDF.show();  // Mostrar os dados lidos
+        
+        // Processamento de dados (opcional)
+        Dataset<Row> processedDF = jdbcDF.filter("coluna > 100");  // Exemplo de filtro
+        
+        // Escrita de dados de volta ao SQL Server
+        processedDF.write()
+            .mode(SaveMode.Overwrite)
+            .jdbc(JDBC_URL, "tabela_de_saida", connectionProperties);
+        
+        spark.stop();
+    }
+}
+Empacotar o Conector
+
+Empacote o projeto em um JAR usando Maven:
+sh
+Copiar código
+mvn clean package
+Fazer Upload do JAR para o S3
+
+Faça o upload do JAR gerado para o bucket S3 configurado:
+sh
+Copiar código
+aws s3 cp target/seu-conector.jar s3://seu-bucket/
+Criar o Manifesto do Conector
+
+Crie um arquivo manifest.json que define o conector para o AWS Glue:
+json
+Copiar código
+{
+    "description": "Custom Connector for SQL Server via JDBC",
+    "author": "Seu Nome",
+    "connectionType": "custom.jdbc.sqlserver",
+    "properties": {
+        "glueVersion": "2.0",
+        "connectorVersion": "1.0",
+        "supportsS3": true,
+        "supportsRedshift": false,
+        "supportsConnectionType": ["source", "target"]
+    },
+    "className": "GlueCustomConnector",
+    "jarFile": "s3://seu-bucket/seu-conector.jar"
+}
+Registrar o Conector no AWS Glue
+
+Use o AWS CLI para registrar o conector:
+sh
+Copiar código
+aws glue create-connection --name custom-sqlserver-connector --connection-input '{
+    "Name": "custom-sqlserver-connector",
+    "ConnectionType": "CUSTOM",
+    "PhysicalConnectionRequirements": {
+        "AvailabilityZone": "us-east-1a",
+        "SecurityGroupIdList": ["sg-xxxxxxxx"],
+        "SubnetId": "subnet-xxxxxxxx"
+    },
+    "ConnectionProperties": {
+        "CONNECTION_URL": "jdbc:sqlserver://<SQL_SERVER_URL>;databaseName=<DATABASE_NAME>",
+        "USERNAME": "<USER>",
+        "PASSWORD": "<PASSWORD>",
+        "CUSTOM_JDBC_DRIVER_JAR_URL": "s3://seu-bucket/seu-conector.jar",
+        "CUSTOM_JDBC_DRIVER_CLASS_NAME": "com.microsoft.sqlserver.jdbc.SQLServerDriver"
+    }
+}'
+Configurar o Conector no Glue Studio
+
+Agora, no AWS Glue Studio, você deve ser capaz de ver o conector personalizado na lista de conectores.
+Crie um job ETL usando a interface visual do Glue Studio, selecione o conector personalizado, configure as fontes e os destinos, e execute o job.
+Testar o Conector
+
+Crie um fluxo de ETL no AWS Glue Studio.
+Adicione o conector como uma fonte e um destino no fluxo de trabalho.
+Execute o job e verifique se os dados são lidos e escritos corretamente.
+Conclusão
+Este guia fornece um exemplo detalhado de como criar, empacotar e registrar um conector personalizado no AWS Glue para leitura e gravação de dados em um SQL Server via JDBC, e como configurar este conector para uso no AWS Glue Visual ETL. Certifique-se de ajustar os parâmetros e propriedades conforme necessário para sua configuração específica e siga as melhores práticas de segurança ao gerenciar suas credenciais e permissões de acesso.
+
+preciso que esse conector retorne o schema e os dados apenas 
+ChatGPT
+Para criar um conector personalizado que retorne apenas o schema e os dados do SQL Server via JDBC, você pode simplificar a implementação para focar nessas funcionalidades. Abaixo está um guia detalhado, incluindo a implementação do conector, empacotamento e registro no AWS Glue.
+
+Passos para Criar um Conector Personalizado que Retorne o Schema e os Dados
+Preparar o Ambiente de Desenvolvimento
+
+Instale o AWS CLI e configure suas credenciais.
+Configure um bucket S3 para armazenar o conector personalizado.
+Tenha o driver JDBC do SQL Server disponível.
+Criar um Projeto Maven
+
+Crie um diretório para o projeto e adicione um arquivo pom.xml para gerenciar as dependências.
+Configurar Dependências no pom.xml
+
+xml
+Copiar código
+<dependencies>
+    <dependency>
+        <groupId>software.amazon.awssdk</groupId>
+        <artifactId>aws-java-sdk-glue</artifactId>
+        <version>2.15.40</version>
+    </dependency>
+    <dependency>
+        <groupId>org.apache.spark</groupId>
+        <artifactId>spark-core_2.12</artifactId>
+        <version>3.1.1</version>
+    </dependency>
+    <dependency>
+        <groupId>org.apache.spark</groupId>
+        <artifactId>spark-sql_2.12</artifactId>
+        <version>3.1.1</version>
+    </dependency>
+    <dependency>
+        <groupId>com.microsoft.sqlserver</groupId>
+        <artifactId>mssql-jdbc</artifactId>
+        <version>8.4.1.jre8</version>
+    </dependency>
+</dependencies>
+Implementar o Conector
+
+Crie a classe principal do conector que implementará a lógica de leitura e retorno do schema e dos dados.
+java
+Copiar código
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
+import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.types.StructType;
+
+import java.util.Properties;
+
+public class GlueCustomConnector {
+    
+    private static final String JDBC_DRIVER = "com.microsoft.sqlserver.jdbc.SQLServerDriver";
+    private static final String JDBC_URL = "jdbc:sqlserver://<SQL_SERVER_URL>;databaseName=<DATABASE_NAME>";
+    private static final String JDBC_USER = "<USER>";
+    private static final String JDBC_PASSWORD = "<PASSWORD>";
+    
+    public static void main(String[] args) {
+        SparkSession spark = SparkSession.builder()
+            .appName("AWS Glue Custom Connector")
+            .config("spark.master", "local")
+            .getOrCreate();
+        
+        // Configuração JDBC
+        Properties connectionProperties = new Properties();
+        connectionProperties.put("user", JDBC_USER);
+        connectionProperties.put("password", JDBC_PASSWORD);
+        connectionProperties.put("driver", JDBC_DRIVER);
+        
+        // Leitura de dados do SQL Server
+        Dataset<Row> jdbcDF = spark.read()
+            .jdbc(JDBC_URL, "tabela_de_entrada", connectionProperties);
+        
+        // Retornar schema
+        StructType schema = jdbcDF.schema();
+        System.out.println("Schema: " + schema.prettyJson());
+        
+        // Retornar dados
+        jdbcDF.show();  // Mostrar os dados lidos
+        
+        spark.stop();
+    }
+}
+Empacotar o Conector
+
+Empacote o projeto em um JAR usando Maven:
+sh
+Copiar código
+mvn clean package
+Fazer Upload do JAR para o S3
+
+Faça o upload do JAR gerado para o bucket S3 configurado:
+sh
+Copiar código
+aws s3 cp target/seu-conector.jar s3://seu-bucket/
+Criar o Manifesto do Conector
+
+Crie um arquivo manifest.json que define o conector para o AWS Glue:
+json
+Copiar código
+{
+    "description": "Custom Connector for SQL Server via JDBC",
+    "author": "Seu Nome",
+    "connectionType": "custom.jdbc.sqlserver",
+    "properties": {
+        "glueVersion": "2.0",
+        "connectorVersion": "1.0",
+        "supportsS3": true,
+        "supportsRedshift": false,
+        "supportsConnectionType": ["source", "target"]
+    },
+    "className": "GlueCustomConnector",
+    "jarFile": "s3://seu-bucket/seu-conector.jar"
+}
+Registrar o Conector no AWS Glue
+
+Use o AWS CLI para registrar o conector:
+sh
+Copiar código
+aws glue create-connection --name custom-sqlserver-connector --connection-input '{
+    "Name": "custom-sqlserver-connector",
+    "ConnectionType": "CUSTOM",
+    "PhysicalConnectionRequirements": {
+        "AvailabilityZone": "us-east-1a",
+        "SecurityGroupIdList": ["sg-xxxxxxxx"],
+        "SubnetId": "subnet-xxxxxxxx"
+    },
+    "ConnectionProperties": {
+        "CONNECTION_URL": "jdbc:sqlserver://<SQL_SERVER_URL>;databaseName=<DATABASE_NAME>",
+        "USERNAME": "<USER>",
+        "PASSWORD": "<PASSWORD>",
+        "CUSTOM_JDBC_DRIVER_JAR_URL": "s3://seu-bucket/seu-conector.jar",
+        "CUSTOM_JDBC_DRIVER_CLASS_NAME": "com.microsoft.sqlserver.jdbc.SQLServerDriver"
+    }
+}'
+Configurar o Conector no Glue Studio
+
+Agora, no AWS Glue Studio, você deve ser capaz de ver o conector personalizado na lista de conectores.
+Crie um job ETL usando a interface visual do Glue Studio, selecione o conector personalizado, configure as fontes e os destinos, e execute o job.
+Testar o Conector
+
+Crie um fluxo de ETL no AWS Glue Studio.
+Adicione o conector como uma fonte e um destino no fluxo de trabalho.
+Execute o job e verifique se os dados são lidos e escritos corretamente.
+Conclusão
+Este guia fornece um exemplo detalhado de como criar, empacotar e registrar um conector personalizado no AWS Glue para leitura e retorno do schema e dos dados de um SQL Server via JDBC. Certifique-se de ajustar os parâmetros e propriedades conforme necessário para sua configuração específica e siga as melhores práticas de segurança ao gerenciar suas credenciais e permissões de acesso.
+
+
+
+
+
+
+
+
+
+ChatGPT pode cometer erros. Considere verificar informações importantes.

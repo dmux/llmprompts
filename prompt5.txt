@@ -1,0 +1,118 @@
+Para criar um arquivo Parquet a partir de um `InternalRow` e um `StructType` sem usar Spark, você pode utilizar a biblioteca Apache Parquet diretamente. Aqui está um exemplo de como fazer isso em Java:
+
+### Dependências
+
+Primeiro, adicione as seguintes dependências no seu arquivo `pom.xml` (se você estiver usando Maven):
+
+```xml
+<dependencies>
+    <dependency>
+        <groupId>org.apache.parquet</groupId>
+        <artifactId>parquet-avro</artifactId>
+        <version>1.12.2</version>
+    </dependency>
+    <dependency>
+        <groupId>org.apache.parquet</groupId>
+        <artifactId>parquet-hadoop</artifactId>
+        <version>1.12.2</version>
+    </dependency>
+    <dependency>
+        <groupId>org.apache.parquet</groupId>
+        <artifactId>parquet-column</artifactId>
+        <version>1.12.2</version>
+    </dependency>
+    <dependency>
+        <groupId>org.apache.hadoop</groupId>
+        <artifactId>hadoop-common</artifactId>
+        <version>3.3.1</version>
+    </dependency>
+</dependencies>
+```
+
+### Código Java
+
+Aqui está um exemplo de código que escreve um `InternalRow` para um arquivo Parquet:
+
+```java
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.parquet.example.data.Group;
+import org.apache.parquet.example.data.simple.SimpleGroup;
+import org.apache.parquet.example.data.simple.convert.GroupRecordConverter;
+import org.apache.parquet.hadoop.ParquetFileWriter;
+import org.apache.parquet.hadoop.ParquetWriter;
+import org.apache.parquet.hadoop.example.ExampleParquetWriter;
+import org.apache.parquet.hadoop.metadata.CompressionCodecName;
+import org.apache.parquet.schema.MessageType;
+import org.apache.parquet.schema.MessageTypeParser;
+import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.sql.types.StructField;
+import org.apache.spark.sql.types.StructType;
+
+import java.io.IOException;
+
+public class ParquetWriterExample {
+
+    public static void writeParquet(InternalRow row, StructType schema, String filePath) throws IOException {
+        Configuration configuration = new Configuration();
+        Path path = new Path(filePath);
+
+        // Convert Spark StructType to Parquet MessageType
+        String parquetSchemaString = convertStructTypeToParquetSchema(schema);
+        MessageType parquetSchema = MessageTypeParser.parseMessageType(parquetSchemaString);
+
+        // Create Parquet writer
+        ExampleParquetWriter.Builder builder = ExampleParquetWriter.builder(path)
+                .withType(parquetSchema)
+                .withConf(configuration)
+                .withCompressionCodec(CompressionCodecName.SNAPPY)
+                .withWriteMode(ParquetFileWriter.Mode.OVERWRITE);
+
+        try (ParquetWriter<Group> writer = builder.build()) {
+            // Convert InternalRow to Parquet Group
+            Group group = convertInternalRowToGroup(row, parquetSchema);
+            writer.write(group);
+        }
+    }
+
+    private static String convertStructTypeToParquetSchema(StructType schema) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("message spark_schema {\n");
+        for (StructField field : schema.fields()) {
+            sb.append("  ").append(field.dataType().catalogString()).append(" ").append(field.name()).append(";\n");
+        }
+        sb.append("}");
+        return sb.toString();
+    }
+
+    private static Group convertInternalRowToGroup(InternalRow row, MessageType schema) {
+        Group group = new SimpleGroup(schema);
+        for (int i = 0; i < row.numFields(); i++) {
+            Object value = row.get(i, null);
+            if (value != null) {
+                group.append(schema.getType(i).getName(), value.toString());
+            }
+        }
+        return group;
+    }
+
+    public static void main(String[] args) throws IOException {
+        // Exemplo de uso
+        // Supondo que você tenha uma instância de InternalRow e StructType
+        InternalRow row = ...; // Obtenha o InternalRow de alguma forma
+        StructType schema = ...; // Defina seu schema
+        String filePath = "output.parquet";
+
+        writeParquet(row, schema, filePath);
+    }
+}
+```
+
+### Explicação
+
+1. **Dependências:** Certifique-se de incluir as dependências do Apache Parquet e Hadoop em seu projeto.
+2. **Conversão de Schema:** A função `convertStructTypeToParquetSchema` converte o `StructType` do Spark para um `MessageType` do Parquet.
+3. **Conversão de InternalRow:** A função `convertInternalRowToGroup` converte um `InternalRow` para um `Group`, que é o formato de dados usado pelo Parquet.
+4. **Escrita do Arquivo Parquet:** A função `writeParquet` escreve o `Group` no arquivo Parquet usando um `ParquetWriter`.
+
+Este exemplo supõe que os tipos de dados do seu `InternalRow` são simples e podem ser convertidos diretamente para strings. Se você estiver lidando com tipos de dados mais complexos, precisará adaptar a lógica de conversão.
